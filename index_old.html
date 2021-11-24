@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8">
+        <title>Visor GML SUMA</title>
+        <link rel="stylesheet" href="src/leaflet.css">
+        <link rel="stylesheet" href="src/css/bootstrap.css">
+        <script src="src/leaflet-src.js"></script>
+        <script src="src/gmlcatastro.js"></script>
+        <script src="https://code.jquery.com/jquery-1.12.3.min.js"></script>
+        <script src="src/jquery-3.2.0.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.0.0/proj4-src.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.0.0/proj4.js"></script>
+        
+        
+       
+        <style>
+            #mapdiv {
+                height:100vh;
+            }
+              
+            .example {
+                padding: 10px;
+                border: 1px solid #ccc;
+            }
+
+            #drop_zone {
+                border: 2px dashed #bbb;
+                -moz-border-radius: 5px;
+                -webkit-border-radius: 5px;
+                border-radius: 5px;
+                padding: 90px;
+                text-align: center;
+                margin-top: 20px;
+                font: 20pt bold 'Vollkorn';
+                color: #bbb;
+                opacity: 1;
+                height: 200px;
+            }
+            
+            .thumb {
+                height: 75px;
+                border: 1px solid #000;
+                margin: 10px 5px 0 0;
+            }
+            
+
+
+            #byte_content {
+                margin: 5px 0;
+                max-height: 100px;
+                overflow-y: auto;
+                overflow-x: hidden;
+            }
+            
+            #byte_range {
+                margin-top: 5px;
+            }
+            
+           
+            table {
+                border-collapse: collapse;
+                width: 100%;
+            }
+
+            th, td {
+                text-align: left;
+            padding: 8px;
+            }
+
+            tr:nth-child(even){background-color: #b4b4b4}
+                
+    </style>
+    </head>
+    <body id="todo">
+
+    
+
+        <div id="side-bar" class="col-md-3">
+            <div id="drop_zone">Arrastra GML aqui</div>
+            <div id="imagen">   <output id="foto"></output></div>
+            <div id="impresion">  <output id="list"></output></div>
+                     
+                  
+            </div> 
+        </div>      
+
+        <div id="mapdiv" class="col-md-9"></div>
+        <script>
+
+                
+                var fichero;
+                var iD=-1;
+                var nameSpace=-1;
+                var area=-1;
+                var label=-1;
+                var puntacos=-1;
+                var listado=-1;
+                var puntosJ=-1;
+                var nombreFihcero="-1";
+                var projections;  //cambiamos la `proyeccion entrre 30N y 31N de la procincia de Alicante
+
+                //proyecciones
+                 projections = {
+    					wgs84: "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs",
+    					ETRS89: "+proj=utm +zone=30 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"
+					};
+
+                //convierte coordendas
+                function convertir (x, y){ 
+        	 				return proj4(projections['ETRS89'],projections['wgs84'],[x,y]);
+  						};
+  
+                //mapa general
+                var map = L.map('mapdiv', {
+                    zoomControl:true, maxZoom:22, minZoom:10,center:[38.34, -0.478], zoom:10 //coordenadas alicante centro
+                 });
+                
+                 //Unidad Mantenimiento informacion grafica -- SUMA
+                 map.attributionControl.addAttribution('<a href="https://www.suma.es" target="_blank">SUMA</a> - Unidad Mantenimiento Informacion Grafica');
+    
+    
+                //capa catastro
+                var catastro = L.tileLayer.wms('http://ovc.catastro.meh.es/Cartografia/WMS/ServidorWMS.aspx', {
+                    layers: 'Catastro', //nombre de la capa del servicio WMS (ver documento getCapabilities)
+                    format: 'image/jpeg',
+                    maxZoom: 22,
+                    maxNativeZoom: 18,
+                    opacity: 1,
+                    zIndex: 2
+                })//.addTo(map);
+
+                //capa PNOA    
+                var pnoa = L.tileLayer.wms('http://www.ign.es/wms-inspire/pnoa-ma', {
+                layers: 'OI.OrthoimageCoverage', //nombre de la capa del servicio WMS (ver documento getCapabilities)
+                format: 'image/jpeg',
+                maxZoom: 22,
+                maxNativeZoom: 18,
+                zIndex: 2
+                }).addTo(map);
+
+
+                //capa OSM pruebas
+                lyrOSM = L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png',{ maxZoom: 22,maxNativeZoom: 19});
+                //map.addLayer(lyrOSM); la añadimos en control de capas
+
+                //Capas base
+                var capasBase={"Catastro":catastro,"OSM": lyrOSM,"PNOA":pnoa};
+
+                //Control capas
+                L.control.layers(capasBase,null,{collapsed:false}).addTo(map);
+
+                //escala
+                var scale = L.control.scale(); // Creating scale control
+                scale.addTo(map); // Adding scale control to the map
+                
+                //poner marca con boton derecho
+                //map.on('contextmenu',function(e){L.marker(e.latlng).addTo(map).bindPopup(e.latlng.toString());});
+
+                function handleDragOver(evt) {
+                     evt.stopPropagation();
+                     evt.preventDefault();
+                     evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+                }
+
+
+                // boton imprimir
+
+                var utils = L.control({ position: 'topright' });
+                    utils.onAdd = function (map) {
+                        var div = L.DomUtil.create('div', 'div_utils_mapa');
+                        //div.innerHTML ='<img src="img/impresora.png" alt="Imprimir" title="Imprimir" onclick="window.print();" />';
+                        div.innerHTML ='<img src="img/impresora.png" alt="Imprimir" title="Imprimir" onclick="imprSelec();" />';
+                        //console.log(mapdiv);
+                    return div;
+                    }
+                    utils.addTo(map)
+ 
+                   
+              
+               
+                function readFile (e) {
+                    //console.log("READFILE");
+                    e.preventDefault();
+                    let file = e.dataTransfer.files[0];
+                    //nombreFichero=file;
+                    //console.log(file.name);
+                    var fich = file.name.split(".");
+                    var salida = [];
+                        //Solo ficheros gml
+                        if ((fich[1]=='gml') || (fich[1]=='GML')) {
+                            let reader = new FileReader();
+                            reader.onloadend = () => printFileContents(reader.result);
+                            reader.readAsText(file, 'ISO-8859-1');
+                            salida.push('<strong>', escape(file.name, ' '));
+                            document.getElementById('list').innerHTML = '<ul>' + salida.join('') + '</ul>';
+                     
+ 
+                        }
+                    else
+                        alert ("El fichero NO es un GML");
+                        
+                }
+
+                function printFileContents (contents) {
+                    //area.style.lineHeight = '30px';
+                    //texto.textContent = '';
+                    //console.log(contents);
+                    //let lines = contents.split(/\n/);
+                    let lines = contents.split('\n');
+                    //console.log(lines.length)
+                    let linesR = contents.split('\r');
+                    //console.log(linesR.length)
+                    if ((linesR.length)>(lines.length))
+                        lines=linesR;
+                    //console.log(contents);
+                    
+                    if (extraeUso(lines)==true)
+                            {
+                            //console.log("USO 31111111111");
+                            projections = {
+    					    wgs84: "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs",
+    					    ETRS89: "+proj=utm +zone=31 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"};
+                            } //if
+
+                    else {
+                        projections = {
+    					wgs84: "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs",
+    					ETRS89: "+proj=utm +zone=30 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs"}
+                            };//else
+                    //console.log(lines);
+                    extraeTag(lines);
+                 }
+
+        
+
+                // listeners zona arrastre GML
+                var dropZone = document.getElementById('drop_zone');
+                dropZone.addEventListener('dragover', e => e.preventDefault());
+                dropZone.addEventListener('drop', readFile);
+                
+               
+        </script>
+    </body>
+</html>
