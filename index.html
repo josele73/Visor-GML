@@ -2,12 +2,12 @@
 <html lang="es">
     <head>
         <meta charset="UTF-8">
-        <title>Visor GML SUMA</title>
+        <title>Visor GML SUMA 3.0</title>
         <link rel="stylesheet" href="src/leaflet.css">
         <link rel="stylesheet" href="src/css/bootstrap.css">
         <script src="src/leaflet-src.js"></script>
         <script src="src/gmlcatastro.js"></script>
-        <script src="https://code.jquery.com/jquery-1.12.3.min.js"></script>
+        
         <script src="src/jquery-3.2.0.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.0.0/proj4-src.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.0.0/proj4.js"></script>
@@ -71,21 +71,29 @@
             tr:nth-child(even){background-color: #b4b4b4}
                 
     </style>
-    </head>
-    <body id="todo">
+	<!DOCTYPE html>
+<html lang="es">
+
+<body id="todo">
 
     
 
         <div id="side-bar" class="col-md-3">
             <div id="drop_zone">Arrastra GML aqui</div>
             <div id="imagen">   <output id="foto"></output></div>
-            <div id="impresion">  <output id="list"></output></div>
+            <div id="impresion"> 
+				<center>
+					<input name="btnImprimir" id="btnImprimir" type="button" class="button" value="Imprimir" onclick="imprSelec()">
+				</center>
+			<output id="list"></output></div>
                      
                   
             </div> 
         </div>      
 
         <div id="mapdiv" class="col-md-9"></div>
+		
+		
         <script>
 
                 
@@ -140,22 +148,24 @@
                 }).addTo(map);
 				
 				 //capa icv  
-                var icv = L.tileLayer.wms('http://terramapas.icv.gva.es/odcv05_etrs89h30_2020', {
-                layers: 'odcv05_etrs89h30_2020_rgb', //nombre de la capa del servicio WMS (ver documento getCapabilities)
+                //var icv = L.tileLayer.wms('http://terramapas.icv.gva.es/odcv05_etrs89h30_2020', {  quitamos 2020
+				//layers: 'odcv05_etrs89h30_2020_rgb', //nombre de la capa del servicio WMS (ver documento getCapabilities) quitamos 2020
+				var icv = L.tileLayer.wms('https://terramapas.icv.gva.es/0202_2023CVAL0025', {
+                layers: '2023CVAL0025_RGB', //nombre de la capa del servicio WMS (ver documento getCapabilities)
                 format: 'image/jpeg',
                 maxZoom: 22,
                 maxNativeZoom: 18,
                 zIndex: 2
                 })//.addTo(map);
 				
-
+				
 
                 //capa OSM pruebas
                 lyrOSM = L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png',{ maxZoom: 22,maxNativeZoom: 19});
                 //map.addLayer(lyrOSM); la añadimos en control de capas
 
                 //Capas base
-                var capasBase={"Catastro":catastro,"OSM": lyrOSM,"PNOA_MA":pnoa,"ICV 2020":icv};
+                var capasBase={"Catastro":catastro,"OSM": lyrOSM,"PNOA_MA":pnoa,"ICV 2023":icv};
 
                 //Control capas
                 L.control.layers(capasBase,null,{collapsed:false}).addTo(map);
@@ -173,8 +183,7 @@
                      evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
                 }
 
-
-                // boton imprimir
+			
 
                 var utils = L.control({ position: 'topright' });
                     utils.onAdd = function (map) {
@@ -187,30 +196,53 @@
                     utils.addTo(map)
  
                    
-              
+				function handleDragOver(evt) {
+					evt.stopPropagation();
+					evt.preventDefault();
+					evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+				}
+				
+
+				function readFile(e) {
+					e.preventDefault();
+					let files = e.dataTransfer.files; // Obtener todos los archivos arrastrados
+					let salida = [];
+					
+					for (let file of files) { // Procesar cada archivo individualmente
+						var fich = file.name.split(".");
+						console.log(file.name); // Imprimir el nombre del archivo en la consola
+						
+						// Solo ficheros GML
+						if ((fich[1] == 'gml') || (fich[1] == 'GML')) {
+							let reader = new FileReader();
+							reader.onloadend = () => {
+								printFileContents(reader.result); // Llama a la función que maneja el contenido del archivo
+							};
+							reader.readAsText(file, 'ISO-8859-1');
+							salida.push('<strong>', escape(file.name), '</strong><br>'); // Agrega el nombre del archivo a la lista
+						} else {
+							alert("El fichero " + file.name + " no es un GML");
+						}
+					}
+					document.getElementById('list').innerHTML += '<ul>' + salida.join('') + '</ul>'; // Actualiza la lista con los nombres de los archivos
+					// Reiniciar los event listeners
+					resetDragDropEvents();
+				}
+
+
+
+
+				function resetDragDropEvents() {
+					// Remover los event listeners existentes
+					dropZone.removeEventListener('dragover', handleDragOver);
+					dropZone.removeEventListener('drop', readFile);
+
+					// Reasignar los event listeners
+					dropZone.addEventListener('dragover', handleDragOver);
+					dropZone.addEventListener('drop', readFile);
+				}
                
-                function readFile (e) {
-                    //console.log("READFILE");
-                    e.preventDefault();
-                    let file = e.dataTransfer.files[0];
-                    //nombreFichero=file;
-                    //console.log(file.name);
-                    var fich = file.name.split(".");
-                    var salida = [];
-                        //Solo ficheros gml
-                        if ((fich[1]=='gml') || (fich[1]=='GML')) {
-                            let reader = new FileReader();
-                            reader.onloadend = () => printFileContents(reader.result);
-                            reader.readAsText(file, 'ISO-8859-1');
-                            salida.push('<strong>', escape(file.name, ' '));
-                            document.getElementById('list').innerHTML = '<ul>' + salida.join('') + '</ul>';
-                     
- 
-                        }
-                    else
-                        alert ("El fichero NO es un GML");
-                        
-                }
+
 
                 function printFileContents (contents) {
                     //area.style.lineHeight = '30px';
@@ -242,14 +274,18 @@
                     extraeTag(lines);
                  }
 
-        
+      
 
+				
                 // listeners zona arrastre GML
                 var dropZone = document.getElementById('drop_zone');
-                dropZone.addEventListener('dragover', e => e.preventDefault());
-                dropZone.addEventListener('drop', readFile);
+				dropZone.addEventListener('dragover', handleDragOver);
+				dropZone.addEventListener('drop', readFile);
                 
                
         </script>
+	
     </body>
+</script>
+
 </html>
